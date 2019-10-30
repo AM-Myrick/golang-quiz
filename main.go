@@ -14,18 +14,19 @@ import (
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	csvFilename := flag.String("csv", "randomQuiz.csv", "a csv file in the format of 'question, answer'")
-	shuffle := flag.Bool("shuffle", false, "a flag to shuffle the questions")
-	timeLimit := flag.Int("limit", 30, "the time limit for the quiz in seconds")
-	flag.Parse()
 
-	if *csvFilename == "randomQuiz.csv" {
-		quizBuilder(100)
-	}
+	csvFilename, shuffle, timeLimit := parseFlags()
+	lines := readCSV(csvFilename)
+	problems := parseLines(lines)
+	timer := time.NewTimer(time.Duration(timeLimit) * time.Second)
 
-	file, err := os.Open(*csvFilename)
+	scoreQuiz(problems, shuffle, timer)
+}
+
+func readCSV(filename string) [][]string {
+	file, err := os.Open(filename)
 	if err != nil {
-		exit(fmt.Sprintf("Failed to open the CSV file: %s", *csvFilename))
+		exit(fmt.Sprintf("Failed to open the CSV file: %s", filename))
 		os.Exit(1)
 	}
 	r := csv.NewReader(file)
@@ -33,13 +34,24 @@ func main() {
 	if err != nil {
 		exit(fmt.Sprintf("Failed to parse the provided CSV file."))
 	}
-	problems := parseLines(lines)
-	timer := time.NewTimer(time.Duration(*timeLimit) * time.Second)
-
-	scoreQuiz(problems, *shuffle, timer)
+	return lines
 }
 
-func quizBuilder(numOfQuestions int) {
+func parseFlags() (string, bool, int) {
+	csvFilename := flag.String("csv", "randomQuiz.csv", "a csv file in the format of 'question, answer'")
+	shuffle := flag.Bool("shuffle", false, "a flag to shuffle the questions")
+	timeLimit := flag.Int("limit", 30, "the time limit for the quiz in seconds")
+	numOfQuestions := flag.Int("questions", 20, "the number of questions generated")
+	flag.Parse()
+
+	if *csvFilename == "randomQuiz.csv" {
+		quizBuilder(*numOfQuestions)
+	}
+
+	return *csvFilename, *shuffle, *timeLimit
+}
+
+func quizBuilder(quizLength int) {
 	var operators = []string{"+", "-", "*"}
 	file, err := os.Create("randomQuiz.csv")
 	if err != nil {
@@ -51,7 +63,7 @@ func quizBuilder(numOfQuestions int) {
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	for i := 0; i < numOfQuestions; i++ {
+	for i := 0; i < quizLength; i++ {
 		firstNumber := rand.Intn(20-1) + 1
 		secondNumber := rand.Intn(20-1) + 1
 		operator := operators[rand.Intn(len(operators))]
@@ -89,10 +101,10 @@ func scoreQuiz(problems []problem, shuffle bool, timer *time.Timer) {
 			return
 		case answer := <-answerCh:
 			if strings.ToLower(answer) == problem.answer {
-				color.Success.Println("Correct!")
+				color.Success.Println("✓")
 				correct++
 			} else {
-				color.Danger.Println("Keep trying!")
+				color.Danger.Println("X")
 			}
 		}
 	}
